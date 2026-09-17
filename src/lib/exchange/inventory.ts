@@ -82,6 +82,15 @@ function classFromText(text: string): WeaponClass | null {
 function ratingsFromText(text: string): WeaponRatings {
   const out = defaultRatings();
   const blob = printable(text);
+  const compact = blob.match(/\bd=(\d+)\s+a=(\d+)\s+r=(\d+)\s+h=(\d+)\s+c=(\d+)/i);
+  if (compact) {
+    out.damage = Number(compact[1]) || 1;
+    out.accuracy = Number(compact[2]) || 1;
+    out.range = Number(compact[3]) || 1;
+    out.handling = Number(compact[4]) || 1;
+    out.recoil = Number(compact[5]) || 1;
+    return out;
+  }
   (Object.keys(out) as Array<keyof WeaponRatings>).forEach((key) => {
     const re = new RegExp("(?:^|\\W)" + key + "[^0-9]{0,16}(10|[1-9])", "i");
     const match = blob.match(re);
@@ -110,9 +119,9 @@ function localOverlay(owner: string): Map<string, { classId?: WeaponClass; ratin
   return map;
 }
 
-async function classFromMintHistory(mint: string): Promise<WeaponClass | null> {
+async function historyFromMint(mint: string): Promise<{ classId: WeaponClass | null; ratings: WeaponRatings | null }> {
   try {
-    const sigs = (await rpc("getSignaturesForAddress", [mint, { limit: 6 }])) as Array<{ signature: string }>;
+    const sigs = (await rpc("getSignaturesForAddress", [mint, { limit: 8 }])) as Array<{ signature: string }>;
     for (const row of sigs || []) {
       const tx = (await rpc("getTransaction", [
         row.signature,
@@ -122,19 +131,21 @@ async function classFromMintHistory(mint: string): Promise<WeaponClass | null> {
         transaction?: { message?: unknown };
       };
       const blob = `${(tx?.meta?.logMessages || []).join("\n")} ${JSON.stringify(tx?.transaction?.message || {})}`;
+      const ratings = /SF STAT|\bd=\d+\s+a=\d+/i.test(blob) ? ratingsFromText(blob) : null;
       const memo = blob.match(/SF WPN ([A-Za-z]+)/i);
+      let classId: WeaponClass | null = null;
       if (memo) {
         const label = memo[1].toLowerCase();
-        if (label === "ar") return "ar";
-        if ((WEAPON_CLASSES as readonly string[]).includes(label)) return label as WeaponClass;
+        if (label === "ar") classId = "ar";
+        else if ((WEAPON_CLASSES as readonly string[]).includes(label)) classId = label as WeaponClass;
       }
-      const parsed = classFromText(blob);
-      if (parsed) return parsed;
+      classId = classId || classFromText(blob);
+      if (classId || ratings) return { classId, ratings };
     }
   } catch {
     /* keep unknown */
   }
-  return null;
+  return { classId: null, ratings: null };
 }
 
 export async function listWalletWeapons(owner: string): Promise<WalletWeapon[]> {
@@ -181,8 +192,11 @@ export async function listWalletWeapons(owner: string): Promise<WalletWeapon[]> 
       /* keep overlay / defaults */
     }
 
-    if (!parsedClass && !local?.classId) {
-      classId = (await classFromMintHistory(info.mint)) || classId;
+    const needsHist = !parsedClass || Object.values(ratings).every((n) => n <= 1);
+    if (needsHist) {
+      const hist = await historyFromMint(info.mint);
+      if (!parsedClass && (hist.classId || local?.classId)) classId = hist.classId || local?.classId || classId;
+      if (hist.ratings && Object.values(hist.ratings).some((n) => n > 1)) ratings = hist.ratings;
     }
 
     weapons.push({
