@@ -120,8 +120,10 @@ function localOverlay(owner: string): Map<string, { classId?: WeaponClass; ratin
 }
 
 async function historyFromMint(mint: string): Promise<{ classId: WeaponClass | null; ratings: WeaponRatings | null }> {
+  let classId: WeaponClass | null = null;
+  let ratings: WeaponRatings | null = null;
   try {
-    const sigs = (await rpc("getSignaturesForAddress", [mint, { limit: 8 }])) as Array<{ signature: string }>;
+    const sigs = (await rpc("getSignaturesForAddress", [mint, { limit: 24 }])) as Array<{ signature: string }>;
     for (const row of sigs || []) {
       const tx = (await rpc("getTransaction", [
         row.signature,
@@ -131,21 +133,24 @@ async function historyFromMint(mint: string): Promise<{ classId: WeaponClass | n
         transaction?: { message?: unknown };
       };
       const blob = `${(tx?.meta?.logMessages || []).join("\n")} ${JSON.stringify(tx?.transaction?.message || {})}`;
-      const ratings = /SF STAT|\bd=\d+\s+a=\d+/i.test(blob) ? ratingsFromText(blob) : null;
-      const memo = blob.match(/SF WPN ([A-Za-z]+)/i);
-      let classId: WeaponClass | null = null;
-      if (memo) {
-        const label = memo[1].toLowerCase();
-        if (label === "ar") classId = "ar";
-        else if ((WEAPON_CLASSES as readonly string[]).includes(label)) classId = label as WeaponClass;
+      if (!classId) {
+        const memo = blob.match(/SF WPN ([A-Za-z]+)/i);
+        if (memo) {
+          const label = memo[1].toLowerCase();
+          if (label === "ar") classId = "ar";
+          else if ((WEAPON_CLASSES as readonly string[]).includes(label)) classId = label as WeaponClass;
+        }
+        classId = classId || classFromText(blob);
       }
-      classId = classId || classFromText(blob);
-      if (classId || ratings) return { classId, ratings };
+      if (/SF STAT|\bd=\d+\s+a=\d+\s+r=\d+\s+h=\d+\s+c=\d+/i.test(blob)) {
+        ratings = ratingsFromText(blob);
+        break;
+      }
     }
   } catch {
     /* keep unknown */
   }
-  return { classId: null, ratings: null };
+  return { classId, ratings };
 }
 
 export async function listWalletWeapons(owner: string): Promise<WalletWeapon[]> {
@@ -186,7 +191,7 @@ export async function listWalletWeapons(owner: string): Promise<WalletWeapon[]> 
       parsedClass = classFromText(raw);
       if (parsedClass) classId = parsedClass;
       const parsedRatings = ratingsFromText(raw);
-      const hasOnchainStats = Object.values(parsedRatings).some((n) => n > 1) || /damage/i.test(printable(raw));
+      const hasOnchainStats = Object.values(parsedRatings).some((n) => n > 1);
       if (hasOnchainStats) ratings = parsedRatings;
     } catch {
       /* keep overlay / defaults */
