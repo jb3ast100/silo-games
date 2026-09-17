@@ -1,63 +1,42 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { StatBars } from "@/components/stat-bars";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { WeaponGlyph } from "@/components/weapon-icon";
 import {
   CLASS_LABEL,
-  EXCHANGE_CLUSTER,
   EXCHANGE_FEE_BPS,
   GAME_ORIGIN,
   TREASURY_SOL,
-  WEAPON_CLASSES,
   feeSplit,
   shortPk,
-  type WeaponClass,
 } from "@/lib/exchange/constants";
+import { listWalletWeapons, type WalletWeapon } from "@/lib/exchange/inventory";
+import { payListing } from "@/lib/exchange/pay";
 import {
-  defaultRatings,
   loadListings,
   loadSales,
   saveListings,
   saveSales,
   uid,
   type ExchangeListing,
-  type WeaponRatings,
 } from "@/lib/exchange/store";
+import { deliverNft, escrowNft, returnNft } from "@/lib/exchange/token";
 import { connectPhantom, getPhantom } from "@/lib/exchange/wallet";
-import { payListing } from "@/lib/exchange/pay";
-
-const STATS: Array<keyof WeaponRatings> = ["damage", "accuracy", "range", "handling", "recoil"];
-
-function loadInventoryFor(wallet: string) {
-  try {
-    const raw = localStorage.getItem("sf_weapon_nfts_v1_" + wallet);
-    if (!raw) return [] as Array<{ mintId: string; classId: WeaponClass; ratings: WeaponRatings }>;
-    const data = JSON.parse(raw) as {
-      weapons?: Array<{ mintId: string; classId: WeaponClass; ratings: WeaponRatings; owner?: string }>;
-    };
-    return (data.weapons || []).filter((w) => w && (!w.owner || w.owner === wallet));
-  } catch {
-    return [];
-  }
-}
 
 export function ExchangeApp() {
   const [wallet, setWallet] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState(
-    "Silo-exclusive weapons only. Open-market transfers are rejected by the game.",
-  );
+  const [loadingInv, setLoadingInv] = useState(false);
+  const [note, setNote] = useState("Connect Phantom on Devnet to load on-chain Silo weapons.");
   const [listings, setListings] = useState<ExchangeListing[]>([]);
-  const [tab, setTab] = useState<"book" | "sell" | "mine">("book");
+  const [tab, setTab] = useState<"book" | "sell" | "mine">("sell");
   const [price, setPrice] = useState("0.25");
-  const [mintId, setMintId] = useState("");
-  const [classId, setClassId] = useState<WeaponClass>("ar");
-  const [ratings, setRatings] = useState<WeaponRatings>(defaultRatings());
-  const [inventory, setInventory] = useState<
-    Array<{ mintId: string; classId: WeaponClass; ratings: WeaponRatings }>
-  >([]);
+  const [inventory, setInventory] = useState<WalletWeapon[]>([]);
+  const [selectedMint, setSelectedMint] = useState<string | null>(null);
 
   useEffect(() => {
     setListings(loadListings());
@@ -72,24 +51,48 @@ export function ExchangeApp() {
     });
   }, []);
 
+  async function refreshInventory(owner: string) {
+    setLoadingInv(true);
+    try {
+      const weapons = await listWalletWeapons(owner);
+      setInventory(weapons);
+      if (weapons.length === 0) {
+        setNote("No Token-2022 weapon NFTs found on this Devnet wallet.");
+      } else {
+        setNote(
+          `Loaded ${weapons.length} on-chain weapon${weapons.length === 1 ? "" : "s"}. Click one, set a price, sell.`,
+        );
+      }
+    } catch (err) {
+      setInventory([]);
+      setNote(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingInv(false);
+    }
+  }
+
   useEffect(() => {
     if (!wallet) {
       setInventory([]);
+      setSelectedMint(null);
       return;
     }
-    setInventory(loadInventoryFor(wallet));
+    void refreshInventory(wallet);
   }, [wallet]);
 
   const split = useMemo(() => feeSplit(Number(price) || 0), [price]);
   const live = listings.filter((l) => l.status === "active");
   const mine = listings.filter((l) => wallet && (l.seller === wallet || l.buyer === wallet));
+  const listedMints = new Set(live.map((l) => l.mintId));
+  const sellable = inventory.filter((w) => !listedMints.has(w.mintId));
+  const selected = sellable.find((w) => w.mintId === selectedMint) || null;
 
   async function onConnect() {
     setBusy(true);
     try {
       const pk = await connectPhantom();
       setWallet(pk);
-      setNote("Wallet connected on Devnet. List a Silo NFT or buy from the book.");
+      setTab("sell");
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err));
     } finally {
@@ -102,60 +105,91 @@ export function ExchangeApp() {
     saveListings(next);
   }
 
-  function fillFromInventory(item: { mintId: string; classId: WeaponClass; ratings: WeaponRatings }) {
-    setMintId(item.mintId);
-    setClassId(item.classId);
-    setRatings({ ...defaultRatings(), ...item.ratings });
-    setTab("sell");
-  }
-
-  function onList() {
+  async function onSell() {
     if (!wallet) {
-      setNote("Connect a wallet before listing.");
+      setNote("Connect a wallet first.");
       return;
     }
-    const id = mintId.trim();
-    if (!id) {
-      setNote("Enter the weapon mint / NFT id from Strike Force.");
+    if (!selected) {
+      setNote("Select a weapon icon from inventory.");
       return;
     }
     if (!Number.isFinite(Number(price)) || Number(price) <= 0) {
       setNote("Set a price in SOL greater than 0.");
       return;
     }
-    if (listings.some((l) => l.status === "active" && l.mintId === id)) {
-      setNote("That mint is already listed.");
-      return;
+    setBusy(true);
+    try {
+      setNote("Approve the listing transfer in Phantom. The NFT moves to exchange escrow.");
+      const escrowed = await escrowNft({
+        mint: selected.mintId,
+        sellerAta: selected.ata,
+        seller: wallet,
+      });
+      const listing: ExchangeListing = {
+        id: uid("list_"),
+        mintId: selected.mintId,
+        classId: selected.classId,
+        name: `SF ${CLASS_LABEL[selected.classId]}`,
+        ratings: { ...selected.ratings },
+        seller: wallet,
+        priceSol: Number(price),
+        status: "active",
+        createdAt: Date.now(),
+        escrowPk: escrowed.escrowPk,
+        escrowAta: escrowed.escrowAta,
+        sellerAta: selected.ata,
+        escrowSecret: escrowed.escrowSecret,
+        listTx: escrowed.signature,
+        attributes: {
+          silo_exclusive: true,
+          marketplace: "silo-exchange",
+          trade_lock: "silo-games-only",
+          royalty_fee_bps: 1000,
+        },
+      };
+      persist([listing, ...listings]);
+      setSelectedMint(null);
+      setTab("book");
+      setNote(`Listed ${listing.name} at ${listing.priceSol} SOL. NFT is in escrow until it sells or you cancel.`);
+      await refreshInventory(wallet);
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
     }
-    const listing: ExchangeListing = {
-      id: uid("list_"),
-      mintId: id,
-      classId,
-      name: `SF ${CLASS_LABEL[classId]}`,
-      ratings: { ...ratings },
-      seller: wallet,
-      priceSol: Number(price),
-      status: "active",
-      createdAt: Date.now(),
-      attributes: {
-        silo_exclusive: true,
-        marketplace: "silo-exchange",
-        trade_lock: "silo-games-only",
-        royalty_fee_bps: 1000,
-      },
-    };
-    persist([listing, ...listings]);
-    setNote(`Listed ${listing.name} at ${listing.priceSol} SOL. 10% routes to the Silo treasury on sale.`);
-    setTab("book");
   }
 
-  function onCancel(id: string) {
-    persist(
-      listings.map((l) =>
-        l.id === id && l.seller === wallet && l.status === "active" ? { ...l, status: "cancelled" } : l,
-      ),
-    );
-    setNote("Listing pulled from the book.");
+  async function onCancel(id: string) {
+    const listing = listings.find((l) => l.id === id);
+    if (!listing || !wallet || listing.seller !== wallet || listing.status !== "active") return;
+    setBusy(true);
+    try {
+      if (listing.escrowAta && listing.escrowPk && listing.escrowSecret) {
+        setNote("Approve the return transfer in Phantom.");
+        const returned = await returnNft({
+          mint: listing.mintId,
+          seller: wallet,
+          escrowPk: listing.escrowPk,
+          escrowAta: listing.escrowAta,
+          escrowSecret: listing.escrowSecret,
+        });
+        persist(
+          listings.map((l) =>
+            l.id === id ? { ...l, status: "cancelled", cancelTx: returned.signature, escrowSecret: undefined } : l,
+          ),
+        );
+        setNote("Listing cancelled. NFT returned to your wallet.");
+      } else {
+        persist(listings.map((l) => (l.id === id ? { ...l, status: "cancelled" } : l)));
+        setNote("Listing pulled from the book.");
+      }
+      await refreshInventory(wallet);
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onBuy(listing: ExchangeListing) {
@@ -169,13 +203,33 @@ export function ExchangeApp() {
     }
     setBusy(true);
     try {
+      setNote("Approve the SOL payment in Phantom.");
       const paid = await payListing({ seller: listing.seller, priceSol: listing.priceSol });
-      const next = listings.map((l) =>
-        l.id === listing.id
-          ? { ...l, status: "sold" as const, buyer: paid.buyer, soldAt: Date.now(), saleTx: paid.signature }
-          : l,
+      let deliverTx = paid.signature;
+      if (listing.escrowAta && listing.escrowSecret) {
+        setNote("Approve the NFT delivery transfer.");
+        const delivered = await deliverNft({
+          mint: listing.mintId,
+          buyer: paid.buyer,
+          escrowAta: listing.escrowAta,
+          escrowSecret: listing.escrowSecret,
+        });
+        deliverTx = delivered.signature;
+      }
+      persist(
+        listings.map((l) =>
+          l.id === listing.id
+            ? {
+                ...l,
+                status: "sold",
+                buyer: paid.buyer,
+                soldAt: Date.now(),
+                saleTx: deliverTx,
+                escrowSecret: undefined,
+              }
+            : l,
+        ),
       );
-      persist(next);
       const sales = loadSales();
       sales.unshift({
         listingId: listing.id,
@@ -185,14 +239,15 @@ export function ExchangeApp() {
         priceSol: paid.split.price,
         treasurySol: paid.split.treasury,
         sellerSol: paid.split.seller,
-        tx: paid.signature,
+        tx: deliverTx,
         at: Date.now(),
       });
       saveSales(sales);
       setNote(
-        `Filled. ${paid.split.seller} SOL to seller, ${paid.split.treasury} SOL treasury fee. Tx ${shortPk(paid.signature)}. Open Strike Force with this wallet to load the NFT.`,
+        `Filled. ${paid.split.seller} SOL to seller, ${paid.split.treasury} SOL treasury. NFT delivered to your wallet.`,
       );
       setTab("mine");
+      await refreshInventory(wallet);
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err));
     } finally {
@@ -213,9 +268,8 @@ export function ExchangeApp() {
             Nowhere else.
           </h1>
           <p className="mt-4 text-lg text-muted">
-            Every Strike Force weapon carries a <em className="text-fg not-italic">silo_exclusive</em> lock.
-            Listings settle in SOL. The house takes {EXCHANGE_FEE_BPS / 100}% to treasury{" "}
-            ({shortPk(TREASURY_SOL)}).
+            Listing escrows the weapon on-chain. Cancel returns it. A sale sends 90% SOL to you and{" "}
+            {EXCHANGE_FEE_BPS / 100}% to treasury ({shortPk(TREASURY_SOL)}).
           </p>
         </div>
         <div className="border border-line bg-surface px-5 py-4">
@@ -238,7 +292,7 @@ export function ExchangeApp() {
         {(
           [
             ["book", `Book (${live.length})`],
-            ["sell", "List a weapon"],
+            ["sell", "Inventory"],
             ["mine", "My trades"],
           ] as const
         ).map(([id, label]) => (
@@ -263,7 +317,7 @@ export function ExchangeApp() {
         live.length === 0 ? (
           <div className="border border-hair bg-surface px-6 py-16 text-center">
             <p className="font-display text-2xl uppercase">The book is empty.</p>
-            <p className="mt-2 text-muted">Connect a wallet and list a Silo-exclusive weapon to open the market.</p>
+            <p className="mt-2 text-muted">Escrow a weapon from Inventory to open a listing.</p>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -275,22 +329,18 @@ export function ExchangeApp() {
                     <span className="font-display text-[11px] uppercase tracking-[0.16em] text-gold">
                       {CLASS_LABEL[listing.classId]}
                     </span>
-                    <span className="font-display text-[11px] uppercase tracking-[0.16em] text-muted">Exclusive</span>
+                    <span className="font-display text-[11px] uppercase tracking-[0.16em] text-muted">Escrowed</span>
                   </div>
                   <div className="flex-1 px-5 py-5">
+                    <div className="mb-4 text-gold">
+                      <WeaponGlyph classId={listing.classId} />
+                    </div>
                     <h3 className="font-display text-[28px] font-semibold uppercase leading-none">{listing.name}</h3>
                     <p className="mt-2 text-sm text-muted">Mint {shortPk(listing.mintId)}</p>
                     <p className="text-sm text-muted">Seller {shortPk(listing.seller)}</p>
-                    <dl className="mt-4 grid grid-cols-5 gap-2 text-center">
-                      {STATS.map((stat) => (
-                        <div key={stat} className="border border-hair px-1 py-2">
-                          <dt className="font-display text-[10px] uppercase tracking-[0.12em] text-muted">
-                            {stat.slice(0, 3)}
-                          </dt>
-                          <dd className="font-display text-lg">{listing.ratings[stat]}</dd>
-                        </div>
-                      ))}
-                    </dl>
+                    <div className="mt-4">
+                      <StatBars ratings={listing.ratings} compact />
+                    </div>
                     <p className="mt-5 font-display text-3xl">{listing.priceSol} SOL</p>
                     <p className="text-sm text-muted">
                       {cut.seller} to seller · {cut.treasury} treasury
@@ -298,8 +348,8 @@ export function ExchangeApp() {
                   </div>
                   <div className="border-t border-hair p-4">
                     {wallet && listing.seller === wallet ? (
-                      <Button type="button" variant="ghost" width="full" onClick={() => onCancel(listing.id)}>
-                        Cancel listing
+                      <Button type="button" variant="ghost" width="full" disabled={busy} onClick={() => onCancel(listing.id)}>
+                        Cancel and return NFT
                       </Button>
                     ) : (
                       <Button type="button" width="full" disabled={busy} onClick={() => onBuy(listing)}>
@@ -315,107 +365,99 @@ export function ExchangeApp() {
       ) : null}
 
       {tab === "sell" ? (
-        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <form
-            className="grid gap-4 border border-line bg-surface px-6 py-8"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onList();
-            }}
-          >
-            <div>
-              <Label htmlFor="mint">Weapon mint / NFT id</Label>
-              <Input
-                id="mint"
-                value={mintId}
-                onChange={(event) => setMintId(event.target.value)}
-                placeholder="nft_… or on-chain mint"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="class">Class</Label>
-              <select
-                id="class"
-                value={classId}
-                onChange={(event) => setClassId(event.target.value as WeaponClass)}
-                className="h-12 w-full border border-hair bg-bg px-3.5 text-fg focus-visible:border-gold focus-visible:outline-none"
+        <div className="grid gap-8 lg:grid-cols-[1.35fr_0.65fr]">
+          <section className="overflow-visible border border-hair bg-surface px-6 py-8">
+            <div className="mb-6 flex items-end justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl font-semibold uppercase">Inventory</h2>
+                <p className="mt-2 text-sm text-muted">
+                  On-chain Token-2022 weapons in this wallet. Hover for Strike Force ratings. Click to select.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!wallet || loadingInv || busy}
+                onClick={() => wallet && refreshInventory(wallet)}
               >
-                {WEAPON_CLASSES.map((id) => (
-                  <option key={id} value={id}>
-                    {CLASS_LABEL[id]}
-                  </option>
-                ))}
-              </select>
+                {loadingInv ? "Scanning…" : "Refresh"}
+              </Button>
             </div>
-            <div className="grid grid-cols-5 gap-2">
-              {STATS.map((stat) => (
-                <div key={stat}>
-                  <Label htmlFor={stat}>{stat.slice(0, 3)}</Label>
-                  <Input
-                    id={stat}
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={ratings[stat]}
-                    onChange={(event) =>
-                      setRatings((prev) => ({
-                        ...prev,
-                        [stat]: Math.max(1, Math.min(10, Number(event.target.value) || 1)),
-                      }))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-            <div>
-              <Label htmlFor="price">Price (SOL)</Label>
-              <Input
-                id="price"
-                type="number"
-                min={0.001}
-                step="0.001"
-                value={price}
-                onChange={(event) => setPrice(event.target.value)}
-                required
-              />
-              <p className="mt-2 text-sm text-muted">
-                Buyer pays {split.price || 0} SOL · you receive {split.seller} SOL · treasury {split.treasury} SOL
-                ({EXCHANGE_FEE_BPS / 100}%).
+            {!wallet ? (
+              <p className="text-sm text-muted">Connect Phantom to scan Devnet inventory.</p>
+            ) : sellable.length === 0 ? (
+              <p className="text-sm text-muted">
+                {loadingInv ? "Reading token accounts…" : "No unlisted weapon NFTs on this wallet."}
               </p>
-            </div>
-            <Button type="submit" width="full" disabled={busy || !wallet}>
-              List on Silo Exchange
-            </Button>
-            <p className="text-sm text-muted">
-              Listing asserts the {EXCHANGE_CLUSTER} mint is Silo-exclusive. Magic Eden / Tensor transfers will not
-              update Strike Force ownership.
-            </p>
-          </form>
-          <aside className="border border-hair bg-surface px-6 py-8">
-            <h2 className="font-display text-2xl font-semibold uppercase">Inventory</h2>
-            <p className="mt-2 text-sm text-muted">
-              Weapons minted in this browser on the Silo site appear here. Otherwise paste the mint id from Strike
-              Force — the exclusive trait travels with the NFT either way.
-            </p>
-            <ul className="mt-6 grid gap-3">
-              {inventory.length === 0 ? (
-                <li className="text-sm text-muted">No local Strike Force inventory for this wallet on this origin.</li>
-              ) : (
-                inventory.map((item) => (
-                  <li key={item.mintId}>
-                    <button
-                      type="button"
-                      className="w-full border border-hair px-4 py-3 text-left hover:border-gold"
-                      onClick={() => fillFromInventory(item)}
-                    >
-                      <span className="block font-display uppercase">{CLASS_LABEL[item.classId]}</span>
-                      <span className="text-sm text-muted">{shortPk(item.mintId)}</span>
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
+            ) : (
+              <ul className="grid grid-cols-3 gap-3 overflow-visible sm:grid-cols-4 md:grid-cols-5">
+                {sellable.map((item) => {
+                  const active = selectedMint === item.mintId;
+                  return (
+                    <li key={item.mintId} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMint(item.mintId)}
+                        className={
+                          "group flex aspect-square w-full flex-col items-center justify-center gap-2 border px-2 text-gold transition-colors " +
+                          (active ? "border-gold bg-gold/10" : "border-hair hover:border-gold")
+                        }
+                      >
+                        <WeaponGlyph classId={item.classId} />
+                        <span className="font-display text-[10px] uppercase tracking-[0.12em] text-fg">
+                          {CLASS_LABEL[item.classId]}
+                        </span>
+                        <div className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-20 hidden w-56 -translate-x-1/2 border border-line bg-bg p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)] group-hover:block">
+                          <p className="mb-2 font-display text-xs uppercase tracking-[0.14em] text-gold">
+                            {CLASS_LABEL[item.classId]}
+                          </p>
+                          <StatBars ratings={item.ratings} compact />
+                          <p className="mt-2 text-[11px] text-muted">{shortPk(item.mintId)}</p>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <aside className="border border-line bg-surface px-6 py-8">
+            <h2 className="font-display text-2xl font-semibold uppercase">Sell</h2>
+            {selected ? (
+              <>
+                <div className="mt-5 text-gold">
+                  <WeaponGlyph classId={selected.classId} />
+                </div>
+                <p className="mt-3 font-display text-xl uppercase">{CLASS_LABEL[selected.classId]}</p>
+                <p className="text-sm text-muted">{shortPk(selected.mintId)}</p>
+                <div className="mt-4">
+                  <StatBars ratings={selected.ratings} />
+                </div>
+                <div className="mt-6">
+                  <Label htmlFor="price">Price (SOL)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    min={0.001}
+                    step="0.001"
+                    value={price}
+                    onChange={(event) => setPrice(event.target.value)}
+                  />
+                  <p className="mt-2 text-sm text-muted">
+                    Buyer pays {split.price || 0} · you get {split.seller} · treasury {split.treasury}
+                  </p>
+                </div>
+                <Button type="button" width="full" className="mt-5" disabled={busy} onClick={onSell}>
+                  Sell
+                </Button>
+                <p className="mt-3 text-sm text-muted">
+                  Phantom will transfer this NFT into exchange escrow. Cancel anytime before it sells to get it back.
+                </p>
+              </>
+            ) : (
+              <p className="mt-4 text-sm text-muted">Select a weapon icon, set a price, then sell.</p>
+            )}
           </aside>
         </div>
       ) : null}
@@ -445,7 +487,7 @@ export function ExchangeApp() {
                     </td>
                     <td className="px-4 py-3">{row.priceSol} SOL</td>
                     <td className="px-4 py-3">{shortPk(row.buyer || row.seller)}</td>
-                    <td className="px-4 py-3">{row.saleTx ? shortPk(row.saleTx) : "—"}</td>
+                    <td className="px-4 py-3">{shortPk(row.saleTx || row.cancelTx || row.listTx || "—")}</td>
                   </tr>
                 ))}
               </tbody>

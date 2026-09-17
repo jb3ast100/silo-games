@@ -18,6 +18,11 @@ type Web3 = SolanaWeb3 & {
   PublicKey: new (s: string) => {
     toString(): string;
     toBytes(): Uint8Array;
+  } & {
+    findProgramAddress: (
+      seeds: Uint8Array[],
+      programId: unknown,
+    ) => Promise<[ { toString(): string }, number ]>;
   };
 };
 
@@ -42,6 +47,12 @@ export function encodeSecret(secret: Uint8Array) {
 
 export function decodeSecret(arr: number[]) {
   return Uint8Array.from(arr);
+}
+
+export async function generateListingKeypair() {
+  const { solanaWeb3 } = await loadWeb3();
+  const web3 = solanaWeb3 as unknown as Web3;
+  return web3.Keypair.generate();
 }
 
 export function restoreListingKeypair(secret: number[], web3: Web3) {
@@ -82,14 +93,23 @@ function ixCreateAta(web3: Web3, payer: string, ata: unknown, owner: string, min
   });
 }
 
-function ixTransfer(web3: Web3, source: string, dest: unknown, owner: unknown, amount = 1) {
-  const data = new Uint8Array(1 + 8);
-  data[0] = 3;
+function ixTransferChecked(
+  web3: Web3,
+  source: string,
+  mint: string,
+  dest: unknown,
+  owner: unknown,
+  amount = 1,
+) {
+  const data = new Uint8Array(1 + 8 + 1);
+  data[0] = 12;
   data.set(u64le(amount), 1);
+  data[9] = 0;
   return new web3.TransactionInstruction({
     programId: new web3.PublicKey(TOKEN_2022),
     keys: [
       { pubkey: new web3.PublicKey(source), isSigner: false, isWritable: true },
+      { pubkey: new web3.PublicKey(mint), isSigner: false, isWritable: false },
       { pubkey: dest, isSigner: false, isWritable: true },
       { pubkey: owner, isSigner: true, isWritable: false },
     ],
@@ -124,7 +144,7 @@ export async function escrowNft(opts: { mint: string; sellerAta: string; seller:
   const escrowAta = await ataAddress(web3, escrowPk, opts.mint);
   const ixs = [
     ixCreateAta(web3, opts.seller, escrowAta, escrowPk, opts.mint),
-    ixTransfer(web3, opts.sellerAta, escrowAta, new web3.PublicKey(opts.seller), 1),
+    ixTransferChecked(web3, opts.sellerAta, opts.mint, escrowAta, new web3.PublicKey(opts.seller), 1),
   ];
   const signature = await send(web3, ixs, []);
   return {
@@ -148,7 +168,7 @@ export async function returnNft(opts: {
   const sellerAta = await ataAddress(web3, opts.seller, opts.mint);
   const ixs = [
     ixCreateAta(web3, opts.seller, sellerAta, opts.seller, opts.mint),
-    ixTransfer(web3, opts.escrowAta, sellerAta, listingKp.publicKey, 1),
+    ixTransferChecked(web3, opts.escrowAta, opts.mint, sellerAta, listingKp.publicKey, 1),
   ];
   const signature = await send(web3, ixs, [listingKp]);
   return { signature, sellerAta: sellerAta.toString() };
@@ -166,7 +186,7 @@ export async function deliverNft(opts: {
   const buyerAta = await ataAddress(web3, opts.buyer, opts.mint);
   const ixs = [
     ixCreateAta(web3, opts.buyer, buyerAta, opts.buyer, opts.mint),
-    ixTransfer(web3, opts.escrowAta, buyerAta, listingKp.publicKey, 1),
+    ixTransferChecked(web3, opts.escrowAta, opts.mint, buyerAta, listingKp.publicKey, 1),
   ];
   const signature = await send(web3, ixs, [listingKp]);
   return { signature, buyerAta: buyerAta.toString() };
