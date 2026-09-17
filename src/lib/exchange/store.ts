@@ -1,4 +1,4 @@
-import { LISTINGS_KEY, SALES_KEY } from "./constants";
+import { LISTINGS_KEY, SALES_KEY, type WeaponClass } from "./constants";
 
 export type ListingStatus = "active" | "sold" | "cancelled";
 
@@ -13,7 +13,7 @@ export type WeaponRatings = {
 export type ExchangeListing = {
   id: string;
   mintId: string;
-  classId: import("./constants").WeaponClass;
+  classId: WeaponClass;
   name: string;
   ratings: WeaponRatings;
   seller: string;
@@ -23,6 +23,12 @@ export type ExchangeListing = {
   soldAt?: number;
   buyer?: string;
   saleTx?: string;
+  escrowPk?: string;
+  escrowAta?: string;
+  sellerAta?: string;
+  escrowSecret?: number[];
+  listTx?: string;
+  cancelTx?: string;
   attributes: {
     silo_exclusive: true;
     marketplace: "silo-exchange";

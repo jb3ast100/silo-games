@@ -34,6 +34,14 @@ export const CLASS_LABEL: Record<WeaponClass, string> = {
   rocket: "Rocket",
 };
 
+export const STAT_LABELS: Record<string, string> = {
+  damage: "Damage",
+  accuracy: "Accuracy",
+  range: "Range",
+  handling: "Handling",
+  recoil: "Recoil",
+};
+
 export const LISTINGS_KEY = "silo_exchange_listings_v1";
 export const SALES_KEY = "silo_exchange_sales_v1";
 
