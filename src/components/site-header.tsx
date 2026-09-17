@@ -5,19 +5,22 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "#proof", label: "Proof of Skill" },
-  { href: "#strike", label: "Strike Force" },
-  { href: "#portfolio", label: "Portfolio" },
-  { href: "#studio", label: "Studio" },
+  { href: "/#proof", label: "Proof of Skill" },
+  { href: "/#strike", label: "Strike Force" },
+  { href: "/exchange", label: "Exchange" },
+  { href: "/#portfolio", label: "Portfolio" },
+  { href: "/#studio", label: "Studio" },
 ];
 
 export function SiteHeader() {
   const [solid, setSolid] = useState(false);
   const [open, setOpen] = useState(false);
+  const [path, setPath] = useState("/");
 
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 24);
     onScroll();
+    setPath(window.location.pathname || "/");
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -38,7 +41,7 @@ export function SiteHeader() {
           : "bg-linear-to-b from-bg/90 to-transparent",
       )}
     >
-      <a href="#top" className="flex items-center gap-3 font-display text-sm font-semibold tracking-[0.22em]">
+      <a href="/" className="flex items-center gap-3 font-display text-sm font-semibold tracking-[0.22em]">
         <img
           src="/images/mark.jpg"
           alt=""
@@ -49,12 +52,16 @@ export function SiteHeader() {
 
       <nav className="hidden items-center gap-7 font-display text-[13px] font-semibold uppercase tracking-[0.14em] lg:flex">
         {LINKS.map((link) => (
-          <a key={link.href} href={link.href} className="hover:text-gold">
+          <a
+            key={link.href}
+            href={link.href}
+            className={cn("hover:text-gold", path === link.href && "text-gold")}
+          >
             {link.label}
           </a>
         ))}
         <Button asChild variant="ghost" className="h-11 border-gold text-gold">
-          <a href="#strike">Play Strike Force</a>
+          <a href="/exchange">NFT Exchange</a>
         </Button>
       </nav>
 
@@ -78,8 +85,8 @@ export function SiteHeader() {
               </a>
             ))}
             <Button asChild>
-              <a href="#strike" onClick={() => setOpen(false)}>
-                Play Strike Force
+              <a href="/exchange" onClick={() => setOpen(false)}>
+                NFT Exchange
               </a>
             </Button>
           </nav>
