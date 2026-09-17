@@ -62,6 +62,10 @@ export function shortPk(id: string) {
   return `${s.slice(0, 4)}…${s.slice(-4)}`;
 }
 
+export function explorerAddress(pk: string) {
+  return `https://explorer.solana.com/address/${encodeURIComponent(pk)}?cluster=${EXCHANGE_CLUSTER}`;
+}
+
 export function solToLamports(sol: number) {
   return BigInt(Math.round(sol * 1_000_000_000));
 }
