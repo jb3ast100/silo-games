@@ -66,6 +66,10 @@ export function explorerAddress(pk: string) {
   return `https://explorer.solana.com/address/${encodeURIComponent(pk)}?cluster=${EXCHANGE_CLUSTER}`;
 }
 
+export function explorerTx(sig: string) {
+  return `https://explorer.solana.com/tx/${encodeURIComponent(sig)}?cluster=${EXCHANGE_CLUSTER}`;
+}
+
 export function solToLamports(sol: number) {
   return BigInt(Math.round(sol * 1_000_000_000));
 }
