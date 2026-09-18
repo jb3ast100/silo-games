@@ -22,7 +22,7 @@ async function library(): Promise<Library> {
   if (global.SiloEconomy) return global.SiloEconomy;
   if (!loaded) loaded = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = '/economy/silo-economy.js?v=20260918-sol-exchange-1';
+    script.src = '/economy/silo-economy.js?v=20260918-sol-exchange-2';
     script.onload = () => global.SiloEconomy ? resolve(global.SiloEconomy) : reject(new Error('Wallet library did not load.'));
     script.onerror = () => { loaded = null; reject(new Error('Unable to load the wallet library.')); };
     document.head.appendChild(script);
