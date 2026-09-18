@@ -45,7 +45,7 @@ export const STAT_LABELS: Record<string, string> = {
 export const LISTINGS_KEY = "silo_exchange_listings_v1";
 export const SALES_KEY = "silo_exchange_sales_v1";
 
-export const GAME_ORIGIN = "https://strike-force-opal.vercel.app";
+export const GAME_ORIGIN = "https://game-server-production-4b94.up.railway.app/";
 export const SITE_ORIGIN = "https://silo-games.vercel.app";
 
 export function feeSplit(priceSol: number) {

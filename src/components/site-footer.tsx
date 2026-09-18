@@ -15,7 +15,7 @@ export function SiteFooter() {
           <a href="/exchange" className="hover:text-gold">
             NFT Exchange
           </a>
-          <a href="https://strike-force-opal.vercel.app" className="hover:text-gold">
+          <a href="https://game-server-production-4b94.up.railway.app/" className="hover:text-gold">
             Strike Force
           </a>
         </p>
