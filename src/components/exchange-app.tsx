@@ -12,7 +12,7 @@ import {
   explorerAddress,
   shortPk,
 } from "@/lib/exchange/constants";
-import { readInventory, readListings, listWeapon, cancelListing, buyListing, quoteSilo, type ChainWeapon, type ChainListing } from "@/lib/exchange/chain";
+import { readInventory, readListings, listWeapon, cancelListing, buyListing, quoteSol, type ChainWeapon, type ChainListing } from "@/lib/exchange/chain";
 import { connectPhantom, getPhantom } from "@/lib/exchange/wallet";
 
 function MintLine({ mint }: { mint: string }) {
@@ -63,7 +63,7 @@ export function ExchangeApp() {
   const [listings,setListings]=useState<ChainListing[]>([]);
   const [verified,setVerified]=useState(false);
   const [tab,setTab]=useState<"book"|"sell"|"mine">("book");
-  const [price,setPrice]=useState("1000");
+  const [price,setPrice]=useState("0.1");
   const [inventory,setInventory]=useState<ChainWeapon[]>([]);
   const [selectedMint,setSelectedMint]=useState<string|null>(null);
   const requestId=useRef(0),walletRef=useRef<string|null>(null);
@@ -87,7 +87,7 @@ export function ExchangeApp() {
     const visible=()=>{if(!document.hidden)void refreshInventory(walletRef.current);};document.addEventListener('visibilitychange',visible);
     return()=>{requestId.current++;phantom?.off?.('accountChanged',changed);phantom?.off?.('disconnect',disconnected);document.removeEventListener('visibilitychange',visible);};
   },[]);
-  const split=useMemo(()=>quoteSilo(price),[price]);
+  const split=useMemo(()=>quoteSol(price),[price]);
   const live=listings.filter(l=>l.status==='active');
   const mine=listings.filter(l=>wallet&&(l.seller===wallet||l.buyer===wallet));
   const sellable=inventory.filter(w=>!w.locked);
@@ -100,9 +100,9 @@ export function ExchangeApp() {
     try {const result=await action();await refreshInventory(walletRef.current);if(walletRef.current!==signingWallet)return false;setNote('Confirmed on Solana: '+result.signature);return true;}
     catch(err){if(walletRef.current===signingWallet)setNote(err instanceof Error?err.message:String(err));return false;}finally{setBusy(false);}
   }
-  async function onSell(){if(!wallet||!selected||!split.valid){setNote('Select a weapon and enter a positive SILO price.');return;}if(await transact(()=>listWeapon(wallet,selected.mintId,price),'Approve listing. The weapon enters escrow and your wallet receives a non-transferable receipt.')){setSelectedMint(null);setTab('book');}}
+  async function onSell(){if(!wallet||!selected||!split.valid){setNote('Select a weapon and enter a positive SOL price.');return;}if(await transact(()=>listWeapon(wallet,selected.mintId,price),'Approve listing. The weapon enters escrow and your wallet receives a non-transferable receipt.')){setSelectedMint(null);setTab('book');}}
   async function onCancel(id:string){if(!wallet)return;await transact(()=>cancelListing(wallet,id),'Approve cancellation to redeem your receipt and return the weapon.');}
-  async function onBuy(row:ChainListing){if(!wallet){setNote('Connect Phantom first.');return;}await transact(()=>buyListing(wallet,row),'Approve one transaction for SILO payment, the burn, and NFT delivery.');}
+  async function onBuy(row:ChainListing){if(!wallet){setNote('Connect Phantom first.');return;}await transact(()=>buyListing(wallet,row),'Approve one transaction for SOL payment, the 10% treasury fee, and NFT delivery.');}
 
   return (
     <div className="mx-auto w-[min(1180px,calc(100%-40px))] pb-24 pt-28">
@@ -117,7 +117,7 @@ export function ExchangeApp() {
             Nowhere else.
           </h1>
           <p className="mt-4 text-lg text-muted">
-            Trade in SILO. Every sale burns 5% of its price. Payment and weapon delivery happen together on Solana. SILO’s 1% transfer fee also applies.
+            Trade in SOL. Sellers receive 90% of the sale price; 10% goes to the Silo treasury. Payment and weapon delivery happen together in one Solana transaction.
           </p>
         </div>
         <div className="border border-line bg-surface px-5 py-4">
@@ -159,7 +159,7 @@ export function ExchangeApp() {
         ))}
       </div>
 
-      <p role="status" className="mb-8 break-all text-sm text-muted">{note}</p>
+      <p role="status" className="mb-8 break-words text-sm text-muted">{note}</p>
 
       {tab === "book" ? (
         live.length === 0 ? (
@@ -171,7 +171,7 @@ export function ExchangeApp() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {live.map((listing) => {
-              const cut = quoteSilo(listing.priceSilo);
+              const cut = quoteSol(listing.priceSol);
               return (
                 <article key={listing.id} className="flex flex-col border border-hair bg-surface">
                   <div className="flex items-center justify-between border-b border-hair px-5 py-3">
@@ -192,9 +192,9 @@ export function ExchangeApp() {
                     <div className="mt-4">
                       <StatBars ratings={listing.ratings} compact />
                     </div>
-                    <p className="mt-5 font-display text-3xl">{listing.priceSilo} SILO</p>
+                    <p className="mt-5 font-display text-3xl">{listing.priceSol} SOL</p>
                     <p className="text-sm text-muted">
-                      {cut.seller} to seller · {cut.burn} burned
+                      {cut.seller} SOL to seller · {cut.fee} SOL to treasury
                     </p>
                   </div>
                   <div className="border-t border-hair p-4">
@@ -204,7 +204,7 @@ export function ExchangeApp() {
                       </Button>
                     ) : (
                       <Button type="button" width="full" disabled={busy} onClick={() => onBuy(listing)}>
-                        Buy with SILO
+                        Buy with SOL
                       </Button>
                     )}
                   </div>
@@ -288,7 +288,7 @@ export function ExchangeApp() {
                   <StatBars ratings={selected.ratings} />
                 </div>
                 <div className="mt-6">
-                  <Label htmlFor="price">Price (SILO)</Label>
+                  <Label htmlFor="price">Price (SOL)</Label>
                   <Input
                     id="price"
                     type="text"
@@ -297,14 +297,14 @@ export function ExchangeApp() {
                     onChange={(event) => setPrice(event.target.value)}
                   />
                   <p className="mt-2 text-sm text-muted">
-                    Buyer pays {split.price || 0} · you get {split.seller} · burned {split.burn}
+                    Buyer pays {split.price || 0} SOL · you receive {split.seller} SOL · treasury receives {split.fee} SOL (10%)
                   </p>
                 </div>
                 <Button type="button" width="full" className="mt-5" disabled={busy || !split.valid} onClick={onSell}>
                   Sell
                 </Button>
                 <p className="mt-3 text-sm text-muted">
-                  Listing has no SILO fee. Your on-chain receipt allows only your wallet to cancel an unsold listing. Solana network fees and rent apply.
+                  Listing has no marketplace fee. Your on-chain receipt allows only your wallet to cancel an unsold listing. Solana network fees and rent apply.
                 </p>
               </>
             ) : (
@@ -337,7 +337,7 @@ export function ExchangeApp() {
                       {row.name}
                       <MintLine mint={row.mintId} />
                     </td>
-                    <td className="px-4 py-3">{row.priceSilo} SILO</td>
+                    <td className="px-4 py-3">{row.priceSol} SOL</td>
                     <td className="px-4 py-3">{shortPk(row.buyer || row.seller)}</td>
                     <td className="px-4 py-3">
                       <a className="text-gold hover:underline" href={explorerAddress(row.receiptMint)} target="_blank" rel="noopener noreferrer">Receipt {shortPk(row.receiptMint)}</a>

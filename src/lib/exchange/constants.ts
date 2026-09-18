@@ -1,6 +1,6 @@
 export const EXCHANGE_CLUSTER = "devnet" as const;
 export const EXCHANGE_RPC = "https://api.devnet.solana.com";
-export const EXCHANGE_FEE_BPS = 500;
+export const EXCHANGE_FEE_BPS = 1000;
 export const EXCHANGE_NAME = "Silo Exchange";
 export const EXCHANGE_MARKETPLACE_ID = "silo-exchange";
 
