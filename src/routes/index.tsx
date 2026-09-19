@@ -52,7 +52,7 @@ function Hero() {
         </p>
         <div className="flex flex-wrap gap-3">
           <Button asChild>
-            <a href="https://game-server-production-4b94.up.railway.app/" target="_blank" rel="noopener noreferrer">Enter Strike Force</a>
+            <a href="https://strike-force.pages.dev/" target="_blank" rel="noopener noreferrer">Enter Strike Force</a>
           </Button>
           <Button asChild variant="ghost">
             <a href="#proof">Read the doctrine</a>
@@ -164,7 +164,7 @@ function Proof() {
         </ul>
         <div>
           <Button asChild>
-            <a href="https://game-server-production-4b94.up.railway.app/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
+            <a href="https://strike-force.pages.dev/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
           </Button>
         </div>
       </div>
@@ -211,7 +211,7 @@ function Strike() {
             <li>Owned loadouts, earned not printed</li>
           </ul>
           <Button asChild>
-            <a href="https://game-server-production-4b94.up.railway.app/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
+            <a href="https://strike-force.pages.dev/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
           </Button>
         </div>
       </div>

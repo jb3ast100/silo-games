@@ -1,5 +1,5 @@
 import { getPhantom } from './wallet';
-import { CLASS_LABEL, GAME_ORIGIN, WEAPON_CLASSES, EXCHANGE_FEE_BPS, type WeaponClass } from './constants';
+import { CLASS_LABEL, ECONOMY_API_ORIGIN, WEAPON_CLASSES, EXCHANGE_FEE_BPS, type WeaponClass } from './constants';
 import type { WeaponRatings } from './store';
 
 export type ChainWeapon = { mintId: string; classId: WeaponClass; ratings: WeaponRatings; sum: number; locked: boolean };
@@ -31,7 +31,7 @@ async function library(): Promise<Library> {
 }
 async function client(): Promise<Client> {
   if (!settings) {
-    const response = await fetch(new URL('/economy/config', import.meta.env.VITE_ECONOMY_API_ORIGIN || GAME_ORIGIN), { cache: 'no-store', signal: AbortSignal.timeout(12000) }).catch(()=>{throw new Error('The exchange could not reach Solana services. Please refresh in a moment.');});
+    const response = await fetch(new URL('/economy/config', import.meta.env.VITE_ECONOMY_API_ORIGIN || ECONOMY_API_ORIGIN), { cache: 'no-store', signal: AbortSignal.timeout(12000) }).catch(()=>{throw new Error('The exchange could not reach Solana services. Please refresh in a moment.');});
     if (!response.ok) throw new Error('The economy service is temporarily unavailable.');
     settings = await response.json() as typeof settings;
   }
