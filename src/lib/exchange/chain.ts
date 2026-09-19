@@ -1,5 +1,5 @@
 import { getPhantom } from './wallet';
-import { CLASS_LABEL, GAME_ORIGIN, WEAPON_CLASSES, type WeaponClass } from './constants';
+import { CLASS_LABEL, GAME_ORIGIN, WEAPON_CLASSES, EXCHANGE_FEE_BPS, type WeaponClass } from './constants';
 import type { WeaponRatings } from './store';
 
 export type ChainWeapon = { mintId: string; classId: WeaponClass; ratings: WeaponRatings; sum: number; locked: boolean };
@@ -22,7 +22,7 @@ async function library(): Promise<Library> {
   if (global.SiloEconomy) return global.SiloEconomy;
   if (!loaded) loaded = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = '/economy/silo-economy.js?v=20260918-sol-exchange-2';
+    script.src = '/economy/silo-economy.js?v=20260918-exchange-five-percent';
     script.onload = () => global.SiloEconomy ? resolve(global.SiloEconomy) : reject(new Error('Wallet library did not load.'));
     script.onerror = () => { loaded = null; reject(new Error('Unable to load the wallet library.')); };
     document.head.appendChild(script);
@@ -51,7 +51,7 @@ export function parseSol(value: string): bigint {
   if (raw < 10n || raw > 18_446_744_073_709_551_615n) throw new Error('Enter a valid positive price.'); return raw;
 }
 export function quoteSol(value: string) {
-  try { const price = parseSol(value), fee = price / 10n;return { valid: true, price: formatSol(price), fee: formatSol(fee), seller: formatSol(price-fee) }; }
+  try { const price = parseSol(value), fee = price * BigInt(EXCHANGE_FEE_BPS) / 10000n;return { valid: true, price: formatSol(price), fee: formatSol(fee), seller: formatSol(price-fee) }; }
   catch { return { valid: false, price: '0', fee: '0', seller: '0' }; }
 }
 export async function readInventory(owner: string): Promise<ChainWeapon[]> { const result=await (await client()).readWallet(owner);return result.weapons.filter(w=>!w.listed).map(weapon); }
