@@ -102,7 +102,7 @@ export function ExchangeApp() {
   }
   async function onSell(){if(!wallet||!selected||!split.valid){setNote('Select a weapon and enter a positive SOL price.');return;}if(await transact(()=>listWeapon(wallet,selected.mintId,price),'Approve listing. The weapon enters escrow and your wallet receives a non-transferable receipt.')){setSelectedMint(null);setTab('book');}}
   async function onCancel(id:string){if(!wallet)return;await transact(()=>cancelListing(wallet,id),'Approve cancellation to redeem your receipt and return the weapon.');}
-  async function onBuy(row:ChainListing){if(!wallet){setNote('Connect Phantom first.');return;}await transact(()=>buyListing(wallet,row),'Approve one transaction for SOL payment, the 10% treasury fee, and NFT delivery.');}
+  async function onBuy(row:ChainListing){if(!wallet){setNote('Connect Phantom first.');return;}await transact(()=>buyListing(wallet,row),'Approve one transaction for SOL payment, the 5% treasury fee, and NFT delivery.');}
 
   return (
     <div className="mx-auto w-[min(1180px,calc(100%-40px))] pb-24 pt-28">
@@ -117,7 +117,7 @@ export function ExchangeApp() {
             Nowhere else.
           </h1>
           <p className="mt-4 text-lg text-muted">
-            Trade in SOL. Sellers receive 90% of the sale price; 10% goes to the Silo treasury. Payment and weapon delivery happen together in one Solana transaction.
+            Trade in SOL. Sellers receive 95% of the sale price; 5% goes to the Silo treasury. Payment and weapon delivery happen together in one Solana transaction.
           </p>
         </div>
         <div className="border border-line bg-surface px-5 py-4">
@@ -297,7 +297,7 @@ export function ExchangeApp() {
                     onChange={(event) => setPrice(event.target.value)}
                   />
                   <p className="mt-2 text-sm text-muted">
-                    Buyer pays {split.price || 0} SOL · you receive {split.seller} SOL · treasury receives {split.fee} SOL (10%)
+                    Buyer pays {split.price || 0} SOL · you receive {split.seller} SOL · treasury receives {split.fee} SOL (5%)
                   </p>
                 </div>
                 <Button type="button" width="full" className="mt-5" disabled={busy || !split.valid} onClick={onSell}>

@@ -10,7 +10,7 @@ export const Route = createFileRoute("/exchange")({
       {
         name: "description",
         content:
-          "Official Silo NFT exchange. Trade Strike Force weapon NFTs in SOL. 10% treasury fee. Exclusive-locked assets cannot be sold on third-party marketplaces.",
+          "Official Silo NFT exchange. Trade Strike Force weapon NFTs in SOL. 5% treasury fee. Exclusive-locked assets cannot be sold on third-party marketplaces.",
       },
     ],
   }),
