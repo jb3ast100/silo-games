@@ -15,7 +15,7 @@ export function SiteFooter() {
           <a href="/exchange" className="hover:text-gold">
             NFT Exchange
           </a>
-          <a href="https://strike-force.pages.dev/" className="hover:text-gold">
+          <a href="https://play.silogames.org/" className="hover:text-gold">
             Strike Force
           </a>
         </p>
