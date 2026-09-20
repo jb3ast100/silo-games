@@ -184,7 +184,7 @@ function Strike() {
         </h2>
         <p className="mt-4 max-w-prose text-lg text-muted">
           The first game in the Silo Games portfolio. Tactical PvP built on Proof of Skill — where
-          outplay your opponents and earn your rewards.
+          you outplay your opponents and earn your rewards.
         </p>
       </div>
       <div className="relative mx-auto w-[min(1280px,100%)]">
