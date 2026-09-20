@@ -52,7 +52,7 @@ function Hero() {
         </p>
         <div className="flex flex-wrap gap-3">
           <Button asChild>
-            <a href="https://strike-force.pages.dev/" target="_blank" rel="noopener noreferrer">Enter Strike Force</a>
+            <a href="https://play.silogames.org/" target="_blank" rel="noopener noreferrer">Enter Strike Force</a>
           </Button>
           <Button asChild variant="ghost">
             <a href="#proof">Read the doctrine</a>
@@ -164,7 +164,7 @@ function Proof() {
         </ul>
         <div>
           <Button asChild>
-            <a href="https://strike-force.pages.dev/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
+            <a href="https://play.silogames.org/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
           </Button>
         </div>
       </div>
@@ -184,7 +184,7 @@ function Strike() {
         </h2>
         <p className="mt-4 max-w-prose text-lg text-muted">
           The first game in the Silo Games portfolio. Tactical PvP built on Proof of Skill — where
-          the better squad leaves with the bag.
+          you outplay your opponents and earn your rewards.
         </p>
       </div>
       <div className="relative mx-auto w-[min(1280px,100%)]">
@@ -205,13 +205,13 @@ function Strike() {
             actually wins. Load in. Prove it. Extract.
           </p>
           <ul className="my-5 list-disc space-y-1.5 pl-5">
-            <li>Squad-based PvP</li>
+            <li>Free-for-all PvP</li>
             <li>Skill-gated rewards</li>
             <li>Seasonal ranked ladder</li>
             <li>Owned loadouts, earned not printed</li>
           </ul>
           <Button asChild>
-            <a href="https://strike-force.pages.dev/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
+            <a href="https://play.silogames.org/" target="_blank" rel="noopener noreferrer">Play Strike Force</a>
           </Button>
         </div>
       </div>

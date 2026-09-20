@@ -39,9 +39,9 @@ export const STAT_LABELS: Record<string, string> = {
   recoil: "Recoil",
 };
 
-export const GAME_ORIGIN = "https://strike-force.pages.dev/";
+export const GAME_ORIGIN = "https://play.silogames.org/";
 export const ECONOMY_API_ORIGIN = "https://game-server-production-4b94.up.railway.app";
-export const SITE_ORIGIN = "https://silo-games.pages.dev";
+export const SITE_ORIGIN = "https://silogames.org";
 
 export function shortPk(id: string) {
   const s = String(id || "");
