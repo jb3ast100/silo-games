@@ -191,6 +191,7 @@ export function ExchangeApp() {
                     <p className="text-sm text-muted">Seller {shortPk(listing.seller)}</p>
                     <div className="mt-4">
                       <StatBars ratings={listing.ratings} compact />
+                      <p className="mt-3 text-sm text-gold">{listing.legendary ? `Legendary #${listing.editionSerial}/3 · Gold finish · ` : ""}{listing.sum}/{listing.maxTotal} allocated</p>
                     </div>
                     <p className="mt-5 font-display text-3xl">{listing.priceSol} SOL</p>
                     <p className="text-sm text-muted">
@@ -263,6 +264,7 @@ export function ExchangeApp() {
                             {CLASS_LABEL[item.classId]}
                           </p>
                           <StatBars ratings={item.ratings} compact />
+                          <p className="text-xs text-gold">{item.legendary ? `Legendary #${item.editionSerial}/3 · ` : ""}{item.sum}/{item.maxTotal}</p>
                           <p className="mt-2 break-all font-mono text-[10px] text-muted">{item.mintId}</p>
                         </div>
                       </button>
@@ -286,6 +288,7 @@ export function ExchangeApp() {
                 </div>
                 <div className="mt-4">
                   <StatBars ratings={selected.ratings} />
+                  <p className="mt-3 text-sm text-gold">{selected.legendary ? `Legendary #${selected.editionSerial}/3 · Gold finish · ` : ""}{selected.sum}/{selected.maxTotal} allocated</p>
                 </div>
                 <div className="mt-6">
                   <Label htmlFor="price">Price (SOL)</Label>
