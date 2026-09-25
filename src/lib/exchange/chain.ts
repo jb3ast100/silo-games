@@ -2,9 +2,9 @@ import { getPhantom } from './wallet';
 import { CLASS_LABEL, ECONOMY_API_ORIGIN, WEAPON_CLASSES, EXCHANGE_FEE_BPS, type WeaponClass } from './constants';
 import type { WeaponRatings } from './store';
 
-export type ChainWeapon = { mintId: string; classId: WeaponClass; ratings: WeaponRatings; sum: number; locked: boolean };
+export type ChainWeapon = { mintId: string; classId: WeaponClass; ratings: WeaponRatings; sum: number; locked: boolean; legendary: boolean; maxTotal: number; editionSerial: number | null };
 export type ChainListing = ChainWeapon & { id: string; seller: string; buyer: string; priceRaw: string; priceSol: string; receiptMint: string; status: 'active' | 'sold' | 'cancelled'; name: string };
-type RawWeapon = { mint: string; classId: number; ratings: number[]; listed: boolean; lockedLife: string };
+type RawWeapon = { mint: string; classId: number; ratings: number[]; listed: boolean; lockedLife: string; legendary?: boolean; maxTotal?: number; editionSerial?: number | null };
 type RawListing = { address: string; seller: string; buyer: string; price: bigint; receiptMint: string; status: number; weapon: RawWeapon };
 type Client = {
   readWallet(owner: string): Promise<{ weapons: RawWeapon[] }>;
@@ -22,7 +22,7 @@ async function library(): Promise<Library> {
   if (global.SiloEconomy) return global.SiloEconomy;
   if (!loaded) loaded = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = '/economy/silo-economy.js?v=20260918-exchange-five-percent';
+    script.src = '/economy/silo-economy.js?v=20260925-controller-legendary-1';
     script.onload = () => global.SiloEconomy ? resolve(global.SiloEconomy) : reject(new Error('Wallet library did not load.'));
     script.onerror = () => { loaded = null; reject(new Error('Unable to load the wallet library.')); };
     document.head.appendChild(script);
@@ -42,7 +42,7 @@ async function client(): Promise<Client> {
 function weapon(row: RawWeapon): ChainWeapon {
   if (!WEAPON_CLASSES[row.classId] || row.ratings.length !== 5 || row.ratings.some(n => !Number.isInteger(n) || n < 1 || n > 10)) throw new Error('Invalid on-chain weapon.');
   const [damage, accuracy, range, handling, recoil] = row.ratings;
-  return { mintId: row.mint, classId: WEAPON_CLASSES[row.classId], ratings: { damage, accuracy, range, handling, recoil }, sum: row.ratings.reduce((a,b)=>a+b,0), locked: row.lockedLife !== '11111111111111111111111111111111' };
+  return { mintId: row.mint, legendary: row.legendary === true, maxTotal: row.legendary ? 40 : 32, editionSerial: row.editionSerial ?? null, classId: WEAPON_CLASSES[row.classId], ratings: { damage, accuracy, range, handling, recoil }, sum: row.ratings.reduce((a,b)=>a+b,0), locked: row.lockedLife !== '11111111111111111111111111111111' };
 }
 export function formatSol(raw: bigint): string { return `${raw / 1_000_000_000n}${raw % 1_000_000_000n ? '.' + (raw % 1_000_000_000n).toString().padStart(9, '0').replace(/0+$/, '') : ''}`; }
 export function parseSol(value: string): bigint {
@@ -56,7 +56,7 @@ export function quoteSol(value: string) {
 }
 export async function readInventory(owner: string): Promise<ChainWeapon[]> { const result=await (await client()).readWallet(owner);return result.weapons.filter(w=>!w.listed).map(weapon); }
 export async function readListings(): Promise<ChainListing[]> {
-  return (await (await client()).listMarket()).map(row=>{const item=weapon(row.weapon);return {...item,id:row.address,seller:row.seller,buyer:row.buyer,priceRaw:row.price.toString(),priceSol:formatSol(row.price),receiptMint:row.receiptMint,status:(['active','sold','cancelled'] as const)[row.status],name:`SF ${CLASS_LABEL[item.classId]}`};});
+  return (await (await client()).listMarket()).map(row=>{const item=weapon(row.weapon);return {...item,id:row.address,seller:row.seller,buyer:row.buyer,priceRaw:row.price.toString(),priceSol:formatSol(row.price),receiptMint:row.receiptMint,status:(['active','sold','cancelled'] as const)[row.status],name:`${item.legendary ? 'Legendary' : 'SF'} ${CLASS_LABEL[item.classId]}`};});
 }
 function assertWallet(owner: string) { if(getPhantom()?.publicKey?.toString()!==owner)throw new Error('Wallet changed. Refresh before continuing.'); }
 export async function listWeapon(owner: string, mint: string, price: string) { parseSol(price);const c=await client();assertWallet(owner);return c.listWeapon(mint,price); }
